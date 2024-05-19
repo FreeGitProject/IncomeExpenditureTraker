@@ -105,6 +105,7 @@ export class MaintenanceComponent implements OnInit {
   ngOnInit(): void {
     this.apiService.getAllTransactions().subscribe({
       next: (res: Transaction[]) => {
+        console.log(res);
         this.dataSource.data = res;
       },
     });

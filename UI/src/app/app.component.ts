@@ -13,8 +13,6 @@ import { SideNavComponent } from './side-nav/side-nav.component';
     MaterialModule,
     PageHeaderComponent,
     SideNavComponent,
-   
-  
   ],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss',

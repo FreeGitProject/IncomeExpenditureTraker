@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Transaction } from './maintenance/maintenance.component';
-//import { MonthlyTransactions } from './view-data/view-data.component';
+import { MonthlyTransactions } from './view-data/view-data.component';
 
 @Injectable({
   providedIn: 'root',
@@ -25,9 +25,9 @@ export class ApiService {
     });
   }
 
-  // getMonthlyTransactions() {
-  //   return this.http.get<MonthlyTransactions[]>(
-  //     this.baseUrl + 'GetMonthlyTransactions'
-  //   );
-  // }
+  getMonthlyTransactions() {
+    return this.http.get<MonthlyTransactions[]>(
+      this.baseUrl + 'GetMonthlyTransactions'
+    );
+  }
 }
