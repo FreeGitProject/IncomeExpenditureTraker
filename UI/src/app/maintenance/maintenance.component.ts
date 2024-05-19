@@ -1,14 +1,20 @@
-import { Component } from '@angular/core';
+import { Component, OnInit, assertInInjectionContext } from '@angular/core';
 import { MaterialModule } from '../material/material.module';
-import { AbstractControl, FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { ReactiveFormsModule } from '@angular/forms';
+import {
+  AbstractControl,
+  FormBuilder,
+  FormGroup,
+  ReactiveFormsModule,
+  ValidationErrors,
+  Validators,
+} from '@angular/forms';
 import { MatTableDataSource } from '@angular/material/table';
-import { CustomTitlecasePipe } from '../titlecase.pipe'; // Adjust the path as needed
-import { CustomDatePipe } from '../custom-date.pipe'; // Import the custom pipe
 import { MatDialog } from '@angular/material/dialog';
 import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
 import { MatSnackBar } from '@angular/material/snack-bar';
-//import { ApiService } from '../api.service';
+import { ApiService } from '../api.service';
+import { CustomTitlecasePipe } from '../titlecase.pipe'; // Adjust the path as needed
+import { CustomDatePipe } from '../custom-date.pipe'; // Import the custom pipe
 
 export interface Transaction {
   id: number;
@@ -17,16 +23,16 @@ export interface Transaction {
   amount: number;
   type: string;
   createdOn: Date;
-} 
+}
 
 @Component({
   selector: 'maintenance',
   standalone: true,
-  imports: [MaterialModule,ReactiveFormsModule,CustomTitlecasePipe,CustomDatePipe],
+  imports: [MaterialModule, ReactiveFormsModule,CustomTitlecasePipe,CustomDatePipe],
   templateUrl: './maintenance.component.html',
-  styleUrl: './maintenance.component.scss'
+  styleUrl: './maintenance.component.scss',
 })
-export class MaintenanceComponent {
+export class MaintenanceComponent implements OnInit {
   years: number[] = [];
   months: { index: number; name: string }[] = [];
   transactionForm: FormGroup = this.fb.group(
@@ -39,21 +45,24 @@ export class MaintenanceComponent {
       amount: this.fb.control(null, [Validators.required]),
       type: this.fb.control('DEBIT', [Validators.required]),
     },
-    { validators: [this.dateValidator] });
+    { validators: [this.dateValidator] }
+  );
+  dataSource = new MatTableDataSource<Transaction>();
+  columns = [
+    'id',
+    'date',
+    'description',
+    'amount',
+    'type',
+    'createdOn',
+    'delete',
+  ];
 
-    dataSource = new MatTableDataSource<Transaction>();
-    columns = [
-      'id',
-      'date',
-      'description',
-      'amount',
-      'type',
-      'createdOn',
-      'delete',
-    ];
-
-  constructor( private fb: FormBuilder ,private dialog:MatDialog, private snackBar : MatSnackBar, // private apiService: ApiService
-    
+  constructor(
+    private fb: FormBuilder,
+    private dialog: MatDialog,
+    private snackBar: MatSnackBar,
+    private apiService: ApiService
   ) {
     for (var year = new Date().getFullYear(); year >= 2021; year--)
       this.years.push(year);
@@ -72,25 +81,35 @@ export class MaintenanceComponent {
       { index: 10, name: 'November' },
       { index: 11, name: 'December' },
     ];
-     this.dataSource.data = [
-      {
-        id: 1,
-        date: new Date(),
-        description: 'Hospitalizatoin in Jehangir',
-        amount: 100,
-        type: 'DEBIT',
-        createdOn: new Date(),
-      },
-      {
-        id: 0,
-        date: new Date(2023, 5, 25),
-        description: 'Hospitalizatoin in Jehangir',
-        amount: 500,
-        type: 'CREDIT',
-        createdOn: new Date(2023, 5, 25),
-      },
-    ];
+
+    // this.dataSource.data = [
+    //   {
+    //     id: 1,
+    //     date: new Date(),
+    //     description: 'Hospitalizatoin in Jehangir',
+    //     amount: 100,
+    //     type: 'DEBIT',
+    //     createdOn: new Date(),
+    //   },
+    //   {
+    //     id: 0,
+    //     date: new Date(2023, 5, 25),
+    //     description: 'Hospitalizatoin in Jehangir',
+    //     amount: 500,
+    //     type: 'CREDIT',
+    //     createdOn: new Date(2023, 5, 25),
+    //   },
+    // ];
   }
+
+  ngOnInit(): void {
+    this.apiService.getAllTransactions().subscribe({
+      next: (res: Transaction[]) => {
+        this.dataSource.data = res;
+      },
+    });
+  }
+
   dateValidator(control: AbstractControl) {
     var date = control.get('date')?.value;
     var month = control.get('month')?.value;
@@ -98,6 +117,7 @@ export class MaintenanceComponent {
     if (date <= validValues[month]) control.get('date')?.setErrors(null);
     else control.get('date')?.setErrors({ invalidDate: true });
   }
+
   insertForm() {
     var transaction = {
       id: this.IdControl.value,
@@ -111,8 +131,18 @@ export class MaintenanceComponent {
       type: this.TxTypeControl.value,
       createdOn: new Date(),
     };
-    console.log(transaction);
+    this.apiService.upsertTransaction(transaction).subscribe({
+      next: (res: Transaction) => {
+        this.transactionForm.reset();
+        this.IdControl.setValue(0);
+        this.YearControl.setValue(new Date().getFullYear());
+        this.MonthControl.setValue(new Date().getMonth() - 1);
+        this.TxTypeControl.setValue('DEBIT');
+        this.dataSource.data = [res, ...this.dataSource.data];
+      },
+    });
   }
+
   edit(transactionToEdit: Transaction) {
     this.dataSource.data = this.dataSource.data.filter(
       (v) => v.id != transactionToEdit.id
@@ -127,33 +157,34 @@ export class MaintenanceComponent {
     this.TxTypeControl.setValue(transactionToEdit.type);
   }
 
-  deleteElement() {
+  deleteElement(transaction: Transaction) {
     let dialogRef = this.dialog.open(ConfirmDialogComponent, {
       data: {
         title: 'Delete Confirmation',
         message: 'This will delete the transaction. Are you sure?',
       },
     });
-    
-    // dialogRef.afterClosed().subscribe({
-    //   next: (res: boolean) => {
-    //     if (res === true) {
-    //       this.apiService.deleteTransaction(transaction.id).subscribe({
-    //         next: (res: string) => {
-    //           this.snackBar.open(res, 'OK');
-    //           if (res == 'deleted')
-    //             this.dataSource.data = this.dataSource.data.filter(
-    //               (v) => v.id != transaction.id
-    //             );
-    //         },
-    //       });
-    //       this.snackBar.open('Item Delted', 'OK');
-    //     }
-    //   },
-    // });
+
+    dialogRef.afterClosed().subscribe({
+      next: (res: boolean) => {
+        if (res === true) {
+          this.apiService.deleteTransaction(transaction.id).subscribe({
+            next: (res: string) => {
+              this.snackBar.open(res, 'OK');
+              if (res == 'deleted')
+                this.dataSource.data = this.dataSource.data.filter(
+                  (v) => v.id != transaction.id
+                );
+            },
+          });
+          this.snackBar.open('Item Delted', 'OK');
+        }
+      },
+    });
   }
-   //#region Form Control Getters
-   get IdControl(): AbstractControl {
+
+  //#region Form Control Getters
+  get IdControl(): AbstractControl {
     return this.transactionForm.get('id') as AbstractControl;
   }
 
@@ -181,5 +212,4 @@ export class MaintenanceComponent {
     return this.transactionForm.get('type') as AbstractControl;
   }
   //#endregion
-
 }
